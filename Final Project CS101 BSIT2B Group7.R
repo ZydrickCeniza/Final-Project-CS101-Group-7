@@ -5,8 +5,6 @@ library(polite)
 
 library(kableExtra)
 
-
-
 polite::use_manners(save_as = 'polite_scrape.R')
 
 
@@ -356,4 +354,196 @@ part5<-rbind(tilt,rest)
 
 #-------------------------------------------------------------------------------
 
+textrev<- character(0)
 
+treviews <- scrape(session) %>%
+  html_nodes('div.text_content') %>% 
+  html_text
+treviews_sub <- as.data.frame(treviews[1:10])
+
+
+textrev<- treviews_sub
+
+
+split_df <- strsplit((textrev[,1]),"|", fixed = TRUE)
+split_df <- data.frame(do.call(rbind,split_df))
+
+
+
+reviews1<-as.data.frame(split_df$X2)
+
+
+
+reviews2<-array(2:30)
+for (i in 2:30) {
+  
+  url<-paste("https://www.airlinequality.com/airline-reviews/airasia/page/",i,"/", sep = "")
+  
+  session <- bow(url,
+                 user_agent = "Educational")
+  
+  
+  textrev2 <- character(0)
+  
+  
+  treviews2<- scrape(session) %>%
+    html_nodes('div.text_content') %>% 
+    html_text
+  treviews_sub2 <- as.data.frame(treviews2[1:10])
+  
+  textrev2<- treviews_sub2
+
+  
+  split_df <- strsplit((textrev2[,1]),"|", fixed = TRUE)
+  split_df <- data.frame(do.call(rbind,split_df))
+
+  r1<-split_df
+  reviews2[i]<-as.data.frame(split_df$X2)
+  
+}
+
+for (i in 2:30){
+  dr1<-data.frame(
+    data=c(reviews2[i])
+  ) 
+  colnames(dr1)<-"Reviews"
+  
+  if(i==2){
+    resreview<-dr1
+  }
+  else if(i>2){
+    resreview<-rbind(resreview,dr1)
+  }
+}
+reviews1<-as.data.frame(reviews1)
+colnames(reviews1)<-"Reviews"
+resreview<-as.data.frame(resreview)
+colnames(resreview)<-"Reviews"
+part6<-rbind(reviews1,resreview)
+finaloutput<-cbind(part3,part4,part5,part6)
+finaloutput
+#---------------------------------------------------------------------
+summary(finaloutput)
+library(ggplot2)
+ggplot(finaloutput, aes(x =name, y = country),colors=class) + geom_point()
+# Malaysia has the most number of passengers that review the Airasia.
+library(ggplot2)
+
+library(dplyr)
+
+groupofcountry<- finaloutput %>%
+  group_by(country) %>%
+  summarise(count=n())
+
+ggplot(groupofcountry, aes(x = country, y = count, fill = country)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Number Reviews per Country",
+       x = "Country",
+       y = "Number of Reviews") +
+  scale_fill_hue()+ guides(fill=FALSE)
+
+recommendedfactor<-factor(finaloutput$recommended)
+barcolors <- c("red", "green")
+plot(recommendedfactor,col=c(barcolors),main="Passenger Recommendations for Air Asia",xlab = "Recommendation", ylab = "Number of Reviews")
+legend("topright", legend = levels(recommendedfactor), fill = barcolors)  
+#Passenger's recommendation reviews to Air Asia Airline. Most passengers prefer/voted to not recommend the airline.
+#--------------------------------------------------------
+library(dplyr)
+
+groupoftraveller<- finaloutput %>%
+  group_by(typeoftraveller) %>%
+  summarise(count=n())
+
+colors <- c("maroon", "pink", "skyblue", "purple")
+
+
+pie(groupoftraveller$count, labels = groupoftraveller$count, col = colors, main = "Traveller Types Distribution on Air Asia")
+legend(x = 1.2, y = 1.2,cex = 0.8, legend = groupoftraveller$typeoftraveller, fill = colors, title = "Type of Travellers")
+
+#The analysis of passenger data for Air Asia reveals a diverse distribution of traveler types, with 30 business travelers, 70 couples on leisure trips, 86 family leisure , and 114 solo leisure travelers.
+
+#--------------------------------------------------------
+library(wordcloud)
+library(tm)
+
+
+reviewCorpus <- Corpus(VectorSource(finaloutput$review))
+
+reviewCorpus <- tm_map(reviewCorpus, content_transformer(tolower))
+reviewCorpus <- tm_map(reviewCorpus, removePunctuation)
+reviewCorpus <- tm_map(reviewCorpus, removeNumbers)
+reviewCorpus <- tm_map(reviewCorpus, removeWords, stopwords("english"))
+reviewCorpus <- tm_map(reviewCorpus, stripWhitespace)
+reviewCorpus <- tm_map(reviewCorpus, removeWords, c("the","just","even","will","my","kg", "us", "said", "via"))
+
+str(reviewCorpus)
+pal <- brewer.pal(9, "Reds")
+pal<- pal[-(1:3)]
+
+set.seed(1234)
+wordcloud(words = reviewCorpus, min.freq = 1, scale = c(2, 0.2), max.words = 100, random.order = FALSE, rot.per = 0.35, colors = pal)
+#The most word that has been spotted in the comment reviewsis the word flight followed by the airasia,service,refund,airline,time,get,flights, and customer.
+#-----------------------------------------------------
+
+library(syuzhet)
+library(SentimentAnalysis)
+library(ggplot2)
+library(SnowballC)
+
+reviewP <- data.frame(text = sapply (reviewCorpus, as.character), stringsAsFactors= FALSE)
+
+reviewSentiments <- get_sentiment (reviewP$text,method = "syuzhet")
+
+reviewsen <- cbind(reviewP, reviewSentiments)
+
+#positive and negative sentiments
+reviewsen$sentiment <- ifelse(reviewsen$reviewSentiments <= -0.5, "1) very negative",
+                              ifelse(reviewsen$reviewSentiments > -0.5 & reviewsen$reviewSentiments < 0, "2) negative",
+                                     ifelse(reviewsen$reviewSentiments == 0, "3) neutral",
+                                            ifelse(reviewsen$reviewSentiments > 0 & reviewsen$reviewSentiments < 0.5, "4) positive",
+                                                   ifelse(reviewsen$reviewSentiments >= 0.5, "5) very positive", NA)))))
+df <- head(reviewsen, n = 10)
+class(reviewsen)
+
+sentiment_counts <- table(reviewsen$sentiment)
+
+
+ggplot(reviewsen, aes(x = sentiment, fill = sentiment)) +
+geom_bar() +
+  labs(title = "Air Asia Customer Sentiments",
+       x = "Sentiment",
+       y = "Count",
+       subtitle = paste("Total Counts: Very Negative =", sentiment_counts["1) very negative"],
+                        "| Negative =", sentiment_counts["2) negative"],
+                        "| Neutral =", sentiment_counts["3) neutral"],
+                        "| Positive =", sentiment_counts["4) positive"],
+                        "| Very Positive =", sentiment_counts["5) very positive"])) +
+  scale_fill_manual(values = c("1) very negative" = "darkred", 
+                               "2) negative" = "red", 
+                               "3) neutral" = "yellow",
+                               "4) positive" = "lightgreen", 
+                               "5) very positive" = "darkgreen")) +
+  scale_y_continuous(breaks = seq(0, 150, 25)) +
+  theme_minimal()
+#There are more very positive sentiments with the number of 136 found in AirAsia followed by the very negative=107,negative=37,positive=18,neutral=2.
+
+#---------------------------------------
+library(ggplot2)
+library(viridis)
+
+ggplot(data = finaloutput, aes(x = date)) +
+  geom_bar(aes(fill = ..count..), stat = "count") +
+  theme(legend.position = "none") +
+  xlab("Date") + ylab("Number of Reviews") +
+  scale_fill_viridis_c()
+
+md<-max(dateof$count)
+subset(dateof,count==md)
+subset(dateof,count==4)
+subset(dateof,count==3)
+subset(dateof,count==2)
+subset(dateof,count==1)
+
+#The maximum number of the number of reviews per date is in the date of September 26, 2023 that has 6 reviews, followed by 4 reviews in date of February 18,2020, 5counts of 3 reviews per date,30counts of 2 reviews per date, and 215counts per 1 review per date in the remaining dates. 
